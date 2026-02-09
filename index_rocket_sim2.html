@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AAC NITK | Ultimate Aerospace Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- AAC NITK ENGINEERING THEME --- */
+        :root {
+            --bg-deep: #05070a;
+            --glass-bg: rgba(11, 15, 25, 0.95);
+            --glass-border: rgba(56, 189, 248, 0.2);
+            --neon-cyan: #38bdf8;
+            --neon-teal: #2dd4bf;
+            --text-gray: #94a3b8;
+            --alert-orange: #f97316;
+            --alert-red: #ef4444;
+            --success-green: #22c55e;
+        }
+
+        body { 
+            margin: 0; overflow: hidden; background-color: var(--bg-deep); 
+            color: #e2e8f0; font-family: 'JetBrains Mono', monospace; 
+            user-select: none; touch-action: none;
+        }
+
+        canvas { display: block; width: 100vw; height: 100vh; }
+
+        /* --- UI COMPONENTS --- */
+        .hud-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+            transition: all 0.3s ease;
+            position: absolute; overflow: hidden; display: flex; flex-direction: column; z-index: 10;
+        }
+        .hud-panel.minimized { height: 42px !important; resize: none; background: rgba(11,15,25,0.8); }
+        .hud-panel.closed { display: none !important; }
+
+        .hud-title {
+            font-family: 'Orbitron', sans-serif; color: var(--neon-cyan); font-size: 0.75rem; letter-spacing: 1px;
+            border-bottom: 1px solid var(--glass-border); padding: 10px 14px;
+            display: flex; justify-content: space-between; align-items: center;
+            cursor: grab; background: linear-gradient(90deg, rgba(56, 189, 248, 0.05), transparent);
+        }
+        .hud-title:active { cursor: grabbing; background: rgba(56, 189, 248, 0.1); }
+        .content-area { padding: 12px; overflow-y: auto; flex-grow: 1; max-height: 60vh; }
+
+        /* Buttons */
+        .btn-main {
+            background: rgba(56, 189, 248, 0.05); border: 1px solid var(--glass-border);
+            color: var(--text-gray); padding: 8px; font-family: 'Orbitron'; font-size: 0.65rem;
+            text-align: center; border-radius: 2px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-main:hover { border-color: var(--neon-cyan); color: #fff; background: rgba(56, 189, 248, 0.1); }
+        .btn-main.active { background: rgba(56, 189, 248, 0.2); color: var(--neon-cyan); border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(56, 189, 248, 0.1); }
+        
+        .btn-mission {
+            display: flex; align-items: center; gap: 8px; padding: 10px;
+            border-left: 2px solid var(--neon-teal); background: linear-gradient(90deg, rgba(45, 212, 191, 0.05), transparent);
+            margin-bottom: 4px; cursor: pointer; transition: 0.2s; font-size: 0.7rem;
+        }
+        .btn-mission:hover { padding-left: 14px; background: rgba(45, 212, 191, 0.1); color: var(--neon-cyan); border-left-color: var(--neon-cyan); }
+
+        .btn-icon { color: var(--text-gray); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 2px; cursor: pointer; }
+        .btn-icon:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .win-close:hover { color: var(--alert-red); }
+
+        /* Bottom Dock */
+        .dock {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 12, 16, 0.95); border: 1px solid var(--glass-border);
+            padding: 6px 16px; border-radius: 8px; display: flex; gap: 12px; z-index: 50;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            white-space: nowrap; overflow-x: auto; max-width: 95vw;
+        }
+        .dock-btn { 
+            color: #94a3b8; font-size: 18px; padding: 10px; cursor: pointer; transition: 0.2s; 
+            display: flex; flex-direction: column; align-items: center; min-width: 44px;
+        }
+        .dock-btn span { font-size: 7px; font-family: 'Orbitron'; margin-top: 2px; }
+        .dock-btn:hover { color: #fff; transform: translateY(-3px); }
+        .dock-btn.active { color: var(--neon-cyan); text-shadow: 0 0 10px var(--neon-cyan); }
+        .divider { width: 1px; height: 24px; background: rgba(255,255,255,0.1); align-self: center; flex-shrink: 0; }
+
+        /* Plots & Legend */
+        .chart-canvas { width: 100%; height: 80px; background: #000; border: 1px solid #1e293b; display: block; }
+        .plot-label { position: absolute; top: 2px; left: 4px; font-size: 8px; color: var(--neon-teal); font-weight: bold; pointer-events: none; }
+        .legend-gradient { width: 12px; height: 100%; border-radius: 2px; background: linear-gradient(to top, blue, cyan, green, yellow, red); border: 1px solid #333; }
+        
+        .cfd-toggle-group { display: flex; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; font-size: 0.7rem; color: #999; }
+
+        /* Map Indicator */
+        .map-mode-indicator {
+            position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid var(--neon-cyan); padding: 6px 12px; border-radius: 20px; z-index: 900; color: var(--neon-cyan); font-family: 'Orbitron'; font-size: 0.75rem; pointer-events: none; display: none;
+        }
+        
+        /* Toast */
+        .event-toast {
+            position: fixed; top: 90px; right: 20px; background: rgba(10, 20, 30, 0.95); border-left: 4px solid var(--neon-cyan);
+            padding: 12px 20px; border-radius: 4px; color: #fff; font-family: 'Orbitron'; font-size: 0.8rem;
+            z-index: 2000; animation: slideIn 0.3s ease-out; box-shadow: 0 5px 20px rgba(0,0,0,0.5); pointer-events: none;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        
+        /* Inputs */
+        .sci-input {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff;
+            padding: 6px; border-radius: 4px; width: 100%; font-family: 'JetBrains Mono'; font-size: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            .branding { transform: scale(0.7); transform-origin: top left; top: 12px; left: 12px; }
+            .hud-panel { width: 94%; left: 3% !important; right: auto !important; max-width: none; }
+            #panelMission { top: 60px !important; height: 40vh !important; }
+            #panelTelem { top: 60px !important; display: none; }
+            .dock { bottom: 10px; width: 96%; padding: 6px; gap: 8px; justify-content: flex-start; }
+            .dock-btn { font-size: 14px; min-width: 40px; padding: 6px; }
+            #winMFD { height: 75vh !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="simCanvas"></canvas>
+
+    <!-- BRANDING -->
+    <div class="fixed top-6 left-6 pointer-events-none select-none z-0 flex items-center gap-4 branding">
+        <img src="image_1e08a8.png" alt="Club Logo" class="w-14 h-14 object-contain drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]">
+        <div>
+            <div class="font-['Orbitron'] text-white text-2xl font-black tracking-tighter drop-shadow-[0_0_15px_rgba(56,189,248,0.4)]">
+                AAC <span class="text-sky-400">NITK</span>
+            </div>
+            <div class="text-[9px] text-gray-500 tracking-[0.3em] font-bold mt-1 uppercase border-t border-gray-700 pt-1 inline-block">
+                AMATEUR ASTRONOMY CLUB
+            </div>
+        </div>
+    </div>
+    
+    <div id="mapIndicator" class="map-mode-indicator"><i class="fas fa-globe mr-2"></i>ORBITAL TRACKING</div>
+
+    <!-- MISSION LIBRARY -->
+    <div id="panelMission" class="hud-panel" style="top: 120px; left: 30px; height: 500px;">
+        <div class="hud-title">
+            <span class="flex items-center gap-2"><i class="fas fa-rocket"></i> MISSION CONTROL</span>
+            <div class="flex gap-1">
+                <div class="btn-icon" onclick="toggleMin('panelMission')"><i class="fas fa-minus"></i></div>
+                <div class="btn-icon win-close" onclick="closePanel('panelMission')"><i class="fas fa-times"></i></div>
+            </div>
+        </div>
+        <div class="content-area custom-scroll">
+            <div class="mb-4">
+                <div class="text-[9px] text-sky-500 font-bold mb-1 border-b border-gray-800 pb-1">HEAVY LIFT</div>
+                <div onclick="loadMission('SLS')" class="btn-mission">NASA SLS (Artemis)</div>
+                <div onclick="loadMission('STARSHIP')" class="btn-mission">SpaceX Starship</div>
+                <div onclick="loadMission('SATURN_V')" class="btn-mission">Saturn V (Apollo)</div>
+                <div onclick="loadMission('FALCON_HEAVY')" class="btn-mission">Falcon Heavy</div>
+            </div>
+            <div class="mb-4">
+                <div class="text-[9px] text-teal-500 font-bold mb-1 border-b border-gray-800 pb-1">ISRO</div>
+                <div onclick="loadMission('LVM3')" class="btn-mission">LVM3 (Chandrayaan)</div>
+                <div onclick="loadMission('PSLV')" class="btn-mission">PSLV (Mangalyaan)</div>
+                <div onclick="loadMission('GSLV_MK2')" class="btn-mission">GSLV Mk II</div>
+                <div onclick="loadMission('SSLV')" class="btn-mission">SSLV (Small Sat)</div>
+            </div>
+            <div>
+                <div class="text-[9px] text-orange-500 font-bold mb-1 border-b border-gray-800 pb-1">TOOLS</div>
+                <div onclick="toggleBuilder()" class="btn-mission text-purple-300" style="border-left-color: #a855f7;">🛠️ Custom Rocket</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TELEMETRY -->
+    <div id="panelTelem" class="hud-panel" style="top: 120px; right: 30px;">
+        <div class="hud-title">
+            <span class="flex items-center gap-2"><i class="fas fa-tachometer-alt"></i> TELEMETRY</span>
+            <div class="flex gap-1">
+                 <div class="btn-icon" onclick="exportData()"><i class="fas fa-download"></i></div>
+                 <div class="btn-icon" onclick="toggleMin('panelTelem')"><i class="fas fa-minus"></i></div>
+            </div>
+        </div>
+        <div class="content-area">
+            <div class="grid grid-cols-2 gap-4 mb-3 border-b border-white/5 pb-3">
+                <div>
+                    <div class="text-[9px] text-gray-500 font-bold">ALTITUDE</div>
+                    <div id="dispAlt" class="text-lg font-bold text-white font-mono">0.0 <span class="text-xs text-gray-600">km</span></div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[9px] text-gray-500 font-bold">VELOCITY</div>
+                    <div id="dispVel" class="text-lg font-bold text-white font-mono">0 <span class="text-xs text-gray-600">m/s</span></div>
+                    <div id="dispMach" class="text-[9px] text-sky-400 font-bold bg-white/5 inline-block px-2 rounded mt-1">MACH 0.00</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mb-3 text-center font-mono text-[9px]">
+                <div class="bg-white/5 p-1 rounded"><div class="text-gray-500">APOAPSIS</div><div id="telAp" class="text-teal-400 font-bold">--</div></div>
+                <div class="bg-white/5 p-1 rounded"><div class="text-gray-500">PERIAPSIS</div><div id="telPe" class="text-teal-400 font-bold">--</div></div>
+                <div class="bg-white/5 p-1 rounded"><div class="text-gray-500">MAX-Q</div><div id="telQ" class="text-orange-400 font-bold">0 kPa</div></div>
+            </div>
+            
+            <div class="relative mb-2" style="height: 80px;">
+                <canvas id="chartAlt" class="chart-canvas"></canvas>
+                <div class="plot-label">ALTITUDE [km]</div>
+            </div>
+            <div class="relative" style="height: 80px;">
+                <canvas id="chartQ" class="chart-canvas"></canvas>
+                <div class="plot-label">DYN PRESSURE [kPa]</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENGINEERING MFD -->
+    <div id="winMFD" class="hud-panel closed" style="bottom: 100px; left: 50%; transform: translateX(-50%); width: 700px; height: 450px;">
+        <div class="hud-title">
+            <span class="flex items-center gap-2"><i class="fas fa-microchip text-green-400"></i> ENGINEERING ANALYSIS SUITE</span>
+            <div class="btn-icon btn-close" onclick="closePanel('winMFD')"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="flex flex-grow overflow-hidden">
+            <div class="w-40 bg-[#0b0e14] border-r border-white/10 p-3 flex flex-col gap-2">
+                <div class="text-[9px] text-gray-500 font-bold pl-1">VISUAL MODE</div>
+                <div onclick="setVisualMode('real')" id="modeReal" class="btn-main active">OPTICAL</div>
+                <div onclick="setVisualMode('cfd')" id="modeCfd" class="btn-main">CFD (FLOW)</div>
+                <div onclick="setVisualMode('fea')" id="modeFea" class="btn-main">FEA (STRESS)</div>
+                <div onclick="setVisualMode('thermal')" id="modeTherm" class="btn-main">THERMAL</div>
+                
+                <div class="mt-auto border-t border-white/10 pt-2 space-y-2 text-[9px] text-gray-400">
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white"><input type="checkbox" id="chkMesh" class="accent-sky-500"> Show Mesh</label>
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white"><input type="checkbox" id="chkContour" checked class="accent-sky-500"> Iso-Surfaces</label>
+                    <label class="flex items-center gap-2 cursor-pointer hover:text-white"><input type="checkbox" id="chkStream" class="accent-sky-500"> Streamlines</label>
+                </div>
+            </div>
+            
+            <div class="flex-grow bg-black relative p-4 flex flex-col">
+                <div class="flex justify-between items-end mb-2 border-b border-white/10 pb-2">
+                    <div class="text-xs font-bold text-white">LIVE SIMULATION VIEWPORT</div>
+                    <div class="text-lg font-mono text-cyan-400" id="mfdVal">--</div>
+                </div>
+                
+                <!-- Legend -->
+                <div id="mfdLegend" class="absolute right-4 top-16 bottom-4 flex gap-2 hidden z-20 pointer-events-none">
+                     <div class="flex flex-col justify-between text-[9px] font-mono text-gray-400 text-right py-1">
+                         <span id="legMax" class="text-red-500 font-bold">--</span>
+                         <span id="legMid" class="text-green-500">--</span>
+                         <span id="legMin" class="text-blue-500 font-bold">--</span>
+                     </div>
+                     <div class="legend-gradient"></div>
+                </div>
+                
+                <div class="flex-grow flex items-center justify-center text-gray-700 text-xs italic">
+                    (RENDERED IN MAIN CANVAS BACKGROUND)
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- BUILDER MODAL -->
+    <div id="winBuild" class="hud-panel closed" style="top: 50%; left: 50%; transform: translate(-50%,-50%); width: 400px; height: auto;">
+        <div class="hud-title">
+            <span>ROCKET DESIGN BUREAU</span>
+            <div class="btn-icon win-close" onclick="toggleBuilder()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="content-area text-xs font-mono space-y-3">
+             <div><label class="text-sky-500 block mb-1">DESIGNATION</label><input id="bName" value="Project X-1" class="sci-input"></div>
+             <div class="grid grid-cols-2 gap-2">
+                 <div><label class="text-gray-500 block">Dry Mass (kg)</label><input id="bDry" type="number" value="20000" class="sci-input"></div>
+                 <div><label class="text-gray-500 block">Fuel Mass (kg)</label><input id="bFuel" type="number" value="100000" class="sci-input"></div>
+                 <div><label class="text-gray-500 block">Thrust (N)</label><input id="bThrust" type="number" value="2000000" class="sci-input"></div>
+                 <div><label class="text-gray-500 block">ISP (s)</label><input id="bIsp" type="number" value="300" class="sci-input"></div>
+             </div>
+             <button onclick="launchCustom()" class="btn-ctrl w-full text-green-400 border-green-500 mt-2 font-bold">ASSEMBLE & LAUNCH</button>
+        </div>
+    </div>
+
+    <!-- MISSION INFO (Bottom Left) -->
+    <div id="missionInfoPanel" class="hud-panel hidden" style="bottom: 110px; left: 30px; width: 340px; height: auto;">
+        <div class="hud-title">
+            <span id="infoTitle">MISSION BRIEF</span>
+            <button class="win-close" onclick="closePanel('missionInfoPanel')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="content-area text-xs font-mono text-gray-300">
+            <div class="grid grid-cols-2 gap-4 mb-2">
+                <div><div class="text-teal-400 font-bold text-[10px]">PAYLOAD</div><div id="infoPayload" class="text-white">--</div></div>
+                <div class="text-right"><div class="text-teal-400 font-bold text-[10px]">DESTINATION</div><div id="infoDest" class="text-white">--</div></div>
+            </div>
+            <div class="bg-white/5 p-3 border-l-2 border-sky-400 italic text-[10px] text-gray-400">
+                <span class="block text-sky-400 not-italic font-bold mb-1 text-[9px]">PROFILE</span>
+                <span id="infoFact">--</span>
+            </div>
+            <!-- Map Orbit Data -->
+            <div id="orbitData" class="hidden mt-3 pt-3 border-t border-white/10">
+                <div class="text-[10px] font-bold text-sky-400 mb-1">ORBITAL ELEMENTS</div>
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                    <div>e: <span id="orbE" class="text-white">--</span></div>
+                    <div>a: <span id="orbA" class="text-white">--</span> km</div>
+                    <div>i: <span id="orbI" class="text-white">--</span>°</div>
+                    <div>T: <span id="orbT" class="text-white">--</span> min</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DOCK -->
+    <div class="dock">
+        <div class="dock-btn" onclick="togglePause()" id="btnPause"><i class="fas fa-play"></i><span>PLAY</span></div>
+        <div class="divider"></div>
+        <div class="dock-btn active" onclick="setWarp(1)" id="warp1">1x<span>REAL</span></div>
+        <div class="dock-btn" onclick="setWarp(5)" id="warp5">5x<span>FAST</span></div>
+        <div class="divider"></div>
+        <div class="dock-btn" onclick="launchSequence()"><i class="fas fa-rocket text-green-400"></i><span>LNCH</span></div>
+        <div class="dock-btn" onclick="skipToOrbit()"><i class="fas fa-forward text-purple-400"></i><span>ORBIT</span></div>
+        <div class="dock-btn" onclick="manualStage()"><i class="fas fa-layer-group text-yellow-400"></i><span>STG</span></div>
+        <div class="dock-btn" onclick="toggleMap()" id="btnMap"><i class="fas fa-globe text-white"></i><span>MAP</span></div>
+        <div class="divider"></div>
+        <div class="dock-btn" onclick="toggleMFD()"><i class="fas fa-microchip text-sky-400"></i><span>ENG</span></div>
+    </div>
+
+    <!-- CFD TERMINAL -->
+    <div id="cfdTerminal" class="hud-panel closed" style="top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 300px; z-index: 1001;">
+        <div class="hud-title">
+            <span class="flex items-center gap-2"><i class="fas fa-terminal text-[#66fcf1]"></i> CFD SETTINGS</span>
+            <button class="win-close" onclick="toggleCFDTerminal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="content-area">
+             <div class="grid grid-cols-2 gap-4">
+                 <button onclick="setVisualMode('real')" id="visReal" class="btn-ctrl active">OPTICAL</button>
+                 <button onclick="setVisualMode('cfd')" id="visCfd" class="btn-ctrl">CFD (FLOW)</button>
+                 <button onclick="setVisualMode('fea')" id="visFea" class="btn-ctrl">FEA (STRESS)</button>
+                 <button onclick="setVisualMode('thermal')" id="visThermal" class="btn-ctrl">THERMAL</button>
+             </div>
+             <div class="flex gap-2 mt-4 text-[10px] text-gray-400">
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="checkContour" checked class="accent-sky-500"> CONTOURS</label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="checkStream" checked class="accent-sky-500"> STREAMLINES</label>
+             </div>
+        </div>
+    </div>
+
+    <!-- DOCS MODAL -->
+    <div id="docModal" class="hud-panel closed" style="top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; z-index: 2000;">
+        <div class="hud-title">
+            <span>PHYSICS KERNEL REFERENCE</span>
+            <button class="win-close" onclick="toggleDocModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="content-area text-gray-300 text-xs font-mono custom-scroll">
+            <h3 class="text-[#66fcf1] font-bold mb-2">1. COMPRESSIBLE AERODYNAMICS</h3>
+            <p class="mb-2">Drag coefficient ($C_d$) varies with Mach number ($M$) to simulate the transonic drag rise.</p>
+             <div class="bg-black/30 p-2 rounded mb-4">$$ F_d = \frac{1}{2} \rho v^2 C_d A $$</div>
+            
+            <h3 class="text-[#66fcf1] font-bold mb-2">2. CFD SOLVER (Potential Flow)</h3>
+            <p class="mb-2">Color mapping uses the Prandtl-Glauert compressibility factor ($\beta$) for realism.</p>
+            <div class="bg-black/30 p-2 rounded mb-4">
+                $$ \beta = \sqrt{|1 - M^2|} $$
+                $$ \text{Intensity} \propto \frac{1}{\beta} \quad (M < 1) $$
+            </div>
+            
+            <h3 class="text-[#66fcf1] font-bold mb-2">3. ORBITAL MECHANICS</h3>
+            <p class="mb-2">Semi-Implicit Euler integration for N-Body gravity. Orbital elements derived via state vectors.</p>
+            <div class="bg-black/30 p-2 rounded mb-4">
+                $$ v_{t+1} = v_t + \frac{F}{m} \Delta t $$
+                $$ \mathbf{e} = \frac{\mathbf{v} \times \mathbf{h}}{\mu} - \frac{\mathbf{r}}{|\mathbf{r}|} $$
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- GLOBAL PROJECT FUNCTION (Moved to Global Scope) ---
+    function project(x, y, z) {
+        // Rotate
+        let x1 = x*Math.cos(camera.rotY) - z*Math.sin(camera.rotY);
+        let z1 = x*Math.sin(camera.rotY) + z*Math.cos(camera.rotY);
+        let y1 = y*Math.cos(camera.rotX) - z1*Math.sin(camera.rotX);
+        let z2 = y*Math.sin(camera.rotX) + z1*Math.cos(camera.rotX);
+        // Translate
+        let scale = camera.scale;
+        // Simple perspective for map view to give depth
+        if(mapView) scale = scale * 1000 / (1000 + z2/1000000); 
+        
+        return { x: x1*scale + camera.x, y: y1*scale + camera.y, z: z2, scale: scale };
+    }
+
+    // --- AUDIO SYSTEM (Procedural) ---
+    const AudioSys = {
+        ctx: null, osc: null, gain: null,
+        init: function() {
+            if(this.ctx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+            this.osc = this.ctx.createOscillator();
+            this.gain = this.ctx.createGain();
+            this.osc.type = 'sawtooth'; // Rough engine sound
+            this.osc.frequency.value = 50;
+            this.osc.connect(this.gain);
+            this.gain.connect(this.ctx.destination);
+            this.gain.gain.value = 0;
+            this.osc.start();
+        },
+        update: function(throttle, density) {
+            if(!this.ctx) return;
+            // Volume based on throttle and atmosphere (sound needs air)
+            const vol = throttle * (0.2 + density*0.8) * 0.3; 
+            // Pitch increases with throttle
+            const freq = 40 + throttle * 60;
+            
+            const now = this.ctx.currentTime;
+            this.gain.gain.setTargetAtTime(vol, now, 0.1);
+            this.osc.frequency.setTargetAtTime(freq, now, 0.1);
+        }
+    };
+
+    // --- CONSTANTS ---
+    const SIM = { G: 6.6743e-11, EarthMass: 5.972e24, EarthRadius: 6371000, dt: 0.05, Scale: 1/10000, ScaleHeight: 8500 };
+
+    // --- MISSION DATA ---
+    const MISSIONS = {
+        SLS: { name: "NASA SLS", target: {dist: 384400000, rad: 1737000, color: '#ccc', name: 'Moon'}, rocket: { stages: [{dry:400000,fuel:2.2e6,thrust:39e6,isp:280,w:8.4,h:65,c:"#e2e8f0"},{dry:85000,fuel:3e5,thrust:7.4e6,isp:452,w:8.4,h:50,c:"#ea580c"}]}},
+        FALCON_HEAVY: { name: "Falcon Heavy", target: {dist: 225000000000, rad: 3389000, color: '#d44', name: 'Mars'}, rocket: { stages: [{dry:66000,fuel:1.2e6,thrust:22.8e6,isp:285,w:12,h:45,c:"#fff"},{dry:22000,fuel:1e5,thrust:7.6e6,isp:311,w:3.7,h:40,c:"#f8fafc"}]}},
+        STARSHIP: { name: "SpaceX Starship", target: {dist: 225000000000, rad: 3389000, color: '#d44', name: 'Mars'}, rocket: { stages: [{dry:200000,fuel:3.4e6,thrust:72e6,isp:330,w:9,h:70,c:"#cbd5e1"},{dry:120000,fuel:1.2e6,thrust:12e6,isp:380,w:9,h:50,c:"#e2e8f0"}]}},
+        SATURN_V: { name: "Saturn V", target: {dist: 384400000, rad: 1737000, color: '#ccc', name: 'Moon'}, rocket: { stages: [{dry:130000,fuel:2.1e6,thrust:35e6,isp:263,w:10,h:42,c:"#fff"},{dry:40000,fuel:4.4e5,thrust:5e6,isp:421,w:10,h:25,c:"#e2e8f0"}]}},
+        LVM3: { name: "ISRO LVM3", target: {dist: 384400000, rad: 1737000, color: '#ccc', name: 'Moon'}, rocket: { stages: [{dry:30000,fuel:4e5,thrust:10e6,isp:270,w:4,h:25,c:"#f8fafc"},{dry:10e3,fuel:1.1e5,thrust:1.6e6,isp:298,w:4,h:17,c:"#94a3b8"}]}},
+        PSLV: { name: "ISRO PSLV", target: {dist: 225000000000, rad: 3389000, color: '#d44', name: 'Mars'}, rocket: { stages: [{dry:20000,fuel:138000,thrust:4800000,isp:269,w:2.8,h:20,c:"#b91c1c"},{dry:5000,fuel:41000,thrust:8e5,isp:293,w:2.8,h:12,c:"#f8fafc"}]}},
+        GSLV_MK2: { name: "GSLV Mk II", target: {dist: 42164000, rad: 500, color: '#ffd700', name: 'GEO'}, rocket: { stages: [{dry:25000,fuel:300000,thrust:8e6,isp:250,w:3.4,h:25,c:"#e2e8f0"}, {dry:5000,fuel:40000,thrust:7.5e5,isp:295,w:3.4,h:15,c:"#94a3b8"}]}},
+        SSLV: { name: "ISRO SSLV", target: {dist: 7000000, rad: 50, color: '#fff', name: 'LEO'}, rocket: { stages: [{dry:8000,fuel:80000,thrust:2.5e6,isp:245,w:2,h:15,c:"#fff"}, {dry:2000,fuel:10000,thrust:5e5,isp:280,w:2,h:10,c:"#ccc"}]}},
+        ARIANE5: { name: "ESA Ariane 5", target: {dist: 1.5e9, rad: 100, color: '#ffd700', name: 'L2'}, rocket: { stages: [{dry:50e3,fuel:5e5,thrust:13e6,isp:275,w:5.4,h:30,c:"#fff"}, {dry:15e3,fuel:1.7e5,thrust:1.3e6,isp:432,w:5.4,h:20,c:"#e2e8f0"}]}},
+        SOYUZ: { name: "Roscosmos Soyuz", target: {dist: 6771000, rad: 100, color: '#fff', name: 'ISS'}, rocket: { stages: [{dry:40e3,fuel:2.5e5,thrust:8.3e6,isp:310,w:10,h:20,c:"#166534"}, {dry:10e3,fuel:8e4,thrust:9e5,isp:330,w:2.9,h:15,c:"#9ca3af"}]}}
+    };
+
+    // --- STATE ---
+    let canvas, ctx, width, height, frameCount=0;
+    let rocket=null, camera={x:0,y:0,scale:1,targetScale:1, rotX:0, rotY:0, camLock:true}, particles=[], spentStages=[];
+    let visualMode='real', isPaused=true, timeWarp=1, replayMode=false, mapView=false;
+    let histAlt=[], histQ=[], histT=[], trail=[], replayData=[];
+    let activeMissionData = null;
+    let mouse={x:0,y:0,down:false,right:false};
+
+    // --- UTILS ---
+    const el=(id)=>document.getElementById(id);
+    const safeText=(id,t)=>{const e=el(id);if(e)e.innerText=t;};
+    const safeClassRemove=(id,c)=>{const e=el(id);if(e)e.classList.remove(c);};
+    const safeClassAdd=(id,c)=>{const e=el(id);if(e)e.classList.add(c);};
+    const safeClassToggle=(id,c)=>{const e=el(id);if(e)e.classList.toggle(c);};
+    const safeStyleDisplay=(id,v)=>{const e=el(id);if(e)e.style.display=v;};
+    const showToast=(msg)=>{
+        const d=document.createElement('div'); d.className='event-toast'; d.innerText=msg;
+        document.body.appendChild(d); setTimeout(()=>d.remove(),3000);
+    };
+    const getTurboColor=(t)=>{
+        t=Math.max(0,Math.min(1,t));
+        return `rgb(${Math.floor(255*Math.sin(t*Math.PI))},${Math.floor(255*Math.sin(t*Math.PI*2))},${Math.floor(255*Math.cos(t*Math.PI/2))})`;
+    };
+    
+    // Gradient Helper
+    function safeRadialGradient(ctx, x1, y1, r1, x2, y2, r2) {
+        if (Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(r1) &&
+            Number.isFinite(x2) && Number.isFinite(y2) && Number.isFinite(r2) &&
+            r1 >= 0 && r2 >= 0) {
+            try {
+                return ctx.createRadialGradient(x1, y1, r1, x2, y2, r2);
+            } catch (e) { return null; }
+        }
+        return null;
+    }
+
+    // --- ROCKET ---
+    class Rocket {
+        constructor(cfg) {
+            this.x=0; this.y=-SIM.EarthRadius; this.vx=0; this.vy=0; this.angle=-Math.PI/2;
+            this.stages=JSON.parse(JSON.stringify(cfg.stages)); this.stg=0; this.loadStg();
+            this.throttle=0; this.auto=false; this.mach=0; this.q=0; this.stress=0; this.gimbal=0;
+            this.failed=false; this.mesh=[]; this.genMesh();
+        }
+        loadStg(){ const s=this.stages[this.stg]; this.dryMass=s.dry; this.fuelMass=s.fuel; this.maxFuel=s.fuel; this.thrustMax=s.thrust; this.isp=s.isp; this.width=s.w; this.height=s.h; this.color=s.c; this.dims={w:s.w,h:s.h}; this.genMesh(); }
+        genMesh(){
+            this.mesh=[];
+            const cols=6, rows=20;
+            for(let i=0;i<=rows;i++) for(let j=0;j<=cols;j++) {
+                this.mesh.push({ rx:(j/cols-0.5)*this.width, ry:(i/rows-0.5)*this.height, s:0, t:20, dx:0, dy:0 });
+            }
+        }
+        get mass(){ let m=this.dryMass+this.fuelMass; for(let i=this.stg+1;i<this.stages.length;i++) m+=this.stages[i].dry+this.stages[i].fuel; return m; }
+        get altitude(){ return Math.sqrt(this.x**2+this.y**2)-SIM.EarthRadius; }
+        get velocity(){ return Math.sqrt(this.vx**2+this.vy**2); }
+        stage() {
+            if(this.stg<this.stages.length-1) {
+                const s=this.stages[this.stg];
+                spentStages.push({x:this.x,y:this.y,vx:this.vx-Math.cos(this.angle)*10,vy:this.vy-Math.sin(this.angle)*10,a:this.angle,w:s.w,h:s.h,c:s.c});
+                this.stg++; this.loadStg(); showToast("STAGE SEPARATION"); return true;
+            } return false;
+        }
+        update(dt) {
+            if(this.failed || replayMode) return;
+            const r=Math.sqrt(this.x**2+this.y**2);
+            if(r<SIM.EarthRadius-50) { this.vx=0;this.vy=0;this.y=-SIM.EarthRadius; return; }
+            
+            const alt=r-SIM.EarthRadius;
+            // Atmosphere Layers
+            let rho = 0;
+            if(alt<10000) rho = 1.225 * Math.exp(-alt/8500); // Troposphere
+            else if(alt<50000) rho = 0.4 * Math.exp(-alt/7500); // Stratosphere
+            else rho = 1.225 * Math.exp(-alt/7200); // General
+            
+            const v=this.velocity;
+            this.mach=v/343; this.q=0.5*rho*v**2; 
+
+            const g=SIM.G*SIM.EarthMass/(r**3); let ax=-g*this.x, ay=-g*this.y;
+            let ft=0;
+
+            if(alt>0&&v>0) {
+                let cd=0.5; if(this.mach>0.8&&this.mach<1.2)cd=0.9;
+                const fd=this.q*cd*(this.width*this.width*0.8); 
+                ax-=(fd/this.mass)*(this.vx/v); ay-=(fd/this.mass)*(this.vy/v);
+            }
+            if(this.fuelMass>0&&this.throttle>0) {
+                ft=this.thrustMax*this.throttle; this.fuelMass-=(ft/(this.isp*9.81))*dt;
+                // Gimbal control logic
+                const targetAng = this.angle; // Simplified auto-stab
+                this.gimbal = (Math.random()-0.5)*0.05 * this.throttle; // Visual jitter
+                
+                ax+=(ft/this.mass)*Math.cos(this.angle+this.gimbal); 
+                ay+=(ft/this.mass)*Math.sin(this.angle+this.gimbal);
+                
+                if(visualMode==='real'&&!isPaused&&frameCount%2===0) {
+                     // Mach Diamonds logic
+                     const shock = this.mach > 1 ? Math.sin(frameCount*0.5)*0.5 + 0.5 : 0;
+                     particles.push({type:'fire',x:this.x-Math.cos(this.angle)*this.height/2,y:this.y-Math.sin(this.angle)*this.height/2,vx:this.vx-Math.cos(this.angle)*150,vy:this.vy-Math.sin(this.angle)*150,life:0.4,shock:shock});
+                }
+                
+                AudioSys.update(this.throttle, rho);
+            } else if(this.fuelMass<=0) this.throttle=0;
+
+            this.vx+=ax*dt; this.vy+=ay*dt; this.x+=this.vx*dt; this.y+=this.vy*dt;
+            if(this.auto&&this.fuelMass>0) {
+                if(alt<500) this.angle=Math.atan2(this.y,this.x);
+                else if(alt<100000) { const up=Math.atan2(this.y,this.x); this.angle=up+(Math.PI/2)*Math.min(1,Math.pow(alt/100000,0.5)); }
+                else { this.angle=Math.atan2(this.vy,this.vx); if(v>Math.sqrt(SIM.G*SIM.EarthMass/r)){this.throttle=0;this.auto=false; showToast("ORBIT REACHED");} }
+            } else if(this.auto) this.stage();
+
+            // --- FEA & THERMAL UPDATE ---
+            const accelG = ft/(this.mass*9.81);
+            const aeroP = this.q/1000; // kPa
+            const aeroHeat = (v**3)*rho*1e-7;
+
+            // Structural Failure Check
+            const maxStress = (aeroP * 5) + (accelG * 20); // Approx
+            if(maxStress > 250) { // 250 MPa limit
+                this.failed = true;
+                showToast("CRITICAL STRUCTURAL FAILURE!");
+                // Explode
+                for(let k=0;k<50;k++) particles.push({type:'fire',x:this.x,y:this.y,vx:(Math.random()-0.5)*200,vy:(Math.random()-0.5)*200,life:2,sz:5});
+            }
+
+            for(let n of this.mesh) {
+                const yFac = (n.ry+this.height/2)/this.height;
+                n.s = maxStress * (1-yFac*0.2); // Stress dist
+                n.t += (yFac>0.9 ? aeroHeat : 0) * dt; // Heat nose
+                // Deformation
+                n.dy = -n.s * 0.001; // Compress
+                if(this.gimbal !== 0) n.dx = n.ry * Math.sin(this.gimbal) * 0.1; // Bend
+            }
+        }
+    }
+
+    // --- MAIN ---
+    function init() {
+        canvas=el('simCanvas'); ctx=canvas.getContext('2d');
+        resize(); window.addEventListener('resize', resize);
+        for(let i=0;i<300;i++) particles.push({type:'star',x:Math.random()*width,y:Math.random()*height,sz:Math.random()*1.5});
+        
+        // Input
+        canvas.addEventListener('mousedown', e=>{ 
+            AudioSys.init();
+            mouse.down=true; if(e.button===2) mouse.right=true; mouse.lastX=e.clientX; mouse.lastY=e.clientY; 
+            if(mapView) camera.camLock=false; 
+        });
+        canvas.addEventListener('mouseup', ()=>{ mouse.down=false; mouse.right=false; });
+        canvas.addEventListener('mousemove', e=>{
+            if(mouse.right && mapView) { camera.rotY+=e.movementX*0.01; camera.rotX+=e.movementY*0.01; }
+            else if(mouse.down && mapView) { camera.x+=e.movementX; camera.y+=e.movementY; camera.camLock=false; }
+            mouse.lastX=e.clientX; mouse.lastY=e.clientY;
+        });
+        canvas.addEventListener('wheel', e=>{ if(mapView) camera.targetScale*=e.deltaY>0?0.9:1.1; });
+        canvas.addEventListener('contextmenu', e=>e.preventDefault());
+        
+        initDraggable();
+        loop();
+    }
+
+    function resize(){ if(canvas){ width=canvas.width=window.innerWidth; height=canvas.height=window.innerHeight; } }
+
+    function loop() {
+        requestAnimationFrame(loop);
+        const dt=SIM.dt; let steps=isPaused?0:timeWarp;
+        
+        if(rocket) {
+            for(let i=0;i<steps;i++) {
+                rocket.update(dt);
+                for(let s of spentStages) { s.x+=s.vx*dt; s.y+=s.vy*dt; s.angle+=0.01*dt; }
+            }
+            if(!isPaused && frameCount%10===0) {
+                histAlt.push(rocket.altitude/1000); histQ.push(rocket.q/1000);
+                if(histAlt.length>200) { histAlt.shift(); histQ.shift(); }
+            }
+            if(!replayMode) { trail.push({x:rocket.x,y:rocket.y,z:0}); if(trail.length>800) trail.shift(); }
+        }
+
+        updateCamera();
+        draw();
+        updateUI();
+        if(rocket) drawCharts();
+        frameCount++;
+    }
+
+    function updateCamera() {
+        if(!rocket) return;
+        if(mapView) {
+            camera.scale += (camera.targetScale - camera.scale)*0.1;
+            if(camera.camLock) {
+                // Lock 3D center
+                const p = project(rocket.x, rocket.y, 0);
+                camera.x += (width/2 - p.x)*0.1;
+                camera.y += (height/2 - p.y)*0.1;
+            }
+        } else {
+            const tx = -rocket.x*camera.scale + width/2;
+            const ty = -rocket.y*camera.scale + height*0.7;
+            camera.x += (tx-camera.x)*0.2; camera.y += (ty-camera.y)*0.2;
+            camera.scale += (camera.targetScale - camera.scale)*0.1;
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle='#05070a'; ctx.fillRect(0,0,width,height);
+        
+        // Stars
+        for(let p of particles) if(p.type==='star') {
+            ctx.fillStyle=`rgba(255,255,255,${0.5+Math.sin(frameCount*0.1+p.x)*0.3})`;
+            ctx.beginPath(); ctx.arc(p.x,p.y,p.sz,0,Math.PI*2); ctx.fill();
+        }
+
+        // Earth
+        if(!mapView || camera.scale > 0.0001) {
+            const ep = project(0,0,0);
+            const r = SIM.EarthRadius * camera.scale;
+            if(Number.isFinite(ep.x) && Number.isFinite(ep.y) && Number.isFinite(r) && r>0) {
+                const g = safeRadialGradient(ctx, ep.x, ep.y, r*0.8, ep.x, ep.y, r*1.2);
+                if(g) {
+                    g.addColorStop(0,"#1e3a8a"); g.addColorStop(1,"transparent");
+                    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(ep.x, ep.y, r*1.2, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.fillStyle="#0f172a"; ctx.beginPath(); ctx.arc(ep.x, ep.y, r, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle="#45a29e"; ctx.lineWidth=2/camera.scale; ctx.stroke();
+            }
+        }
+
+        if(rocket) {
+            if(trail.length>1) {
+                ctx.strokeStyle="rgba(56, 189, 248, 0.4)"; ctx.lineWidth=2; ctx.beginPath();
+                for(let t of trail) { const tp=project(t.x,t.y,0); ctx.lineTo(tp.x,tp.y); }
+                ctx.stroke();
+            }
+
+            if(visualMode !== 'real' && !mapView) drawCFD(rocket);
+            
+            const rp = project(rocket.x, rocket.y, 0);
+            if(!mapView) {
+                ctx.save(); ctx.translate(rp.x, rp.y); 
+                ctx.rotate(rocket.angle + Math.PI/2);
+                
+                const w = rocket.width * camera.scale;
+                const h = rocket.height * camera.scale;
+
+                if(visualMode === 'real') {
+                    ctx.fillStyle = rocket.color;
+                    ctx.fillRect(-w/2, -h/2, w, h);
+                    if(rocket.throttle>0) {
+                        ctx.fillStyle = "#fb923c";
+                        ctx.beginPath(); ctx.moveTo(-w/2, h/2); 
+                        ctx.lineTo(0, h/2 + w*3*rocket.throttle); 
+                        ctx.lineTo(w/2, h/2); ctx.fill();
+                    }
+                } else {
+                    const cols=6, rows=20; const cw=w/cols, rh=h/rows;
+                    for(let i=0;i<rows;i++) for(let j=0;j<cols;j++) {
+                        const idx = i*(cols+1)+j;
+                        const n = rocket.mesh[idx];
+                        let val=0;
+                        if(n) {
+                            if(visualMode==='fea') val = Math.min(1, n.s/200);
+                            else if(visualMode==='thermal') val = Math.min(1, (n.t-20)/1000);
+                        }
+                        ctx.fillStyle = getTurboColor(val);
+                        const dx = n ? (n.dx||0) : 0;
+                        const dy = n ? (n.dy||0) : 0;
+                        ctx.fillRect(-w/2 + j*cw + dx, -h/2 + i*rh + dy, cw+0.5, rh+0.5);
+                    }
+                }
+                ctx.restore();
+            } else {
+                ctx.fillStyle = "#fff"; ctx.fillRect(rp.x-2, rp.y-2, 4, 4);
+            }
+            
+            // Debris
+            for(let s of spentStages) {
+                const sp = project(s.x, s.y, 0);
+                ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(s.angle+Math.PI/2);
+                ctx.fillStyle="#475569"; ctx.fillRect(-s.w/2*camera.scale, -s.h/2*camera.scale, s.w*camera.scale, s.h*camera.scale);
+                ctx.restore();
+            }
+        }
+        
+        for(let i=particles.length-1; i>=0; i--) {
+            let p=particles[i]; if(p.type==='star') continue;
+            if(p.type==='stream') {
+                const pp=project(p.x, p.y, 0);
+                ctx.fillStyle=p.color || '#fff'; ctx.fillRect(pp.x, pp.y, 2, 2);
+                
+                let dx=p.x-rocket.x, dy=p.y-rocket.y, d=Math.sqrt(dx*dx+dy*dy);
+                if(d<rocket.height*2) { p.x -= rocket.vx*SIM.dt; p.y -= rocket.vy*SIM.dt; }
+                p.life -= 0.05;
+            } else {
+                p.x+=p.vx*SIM.dt; p.y+=p.vy*SIM.dt; p.life-=0.05;
+                if(!mapView) {
+                    const pp=project(p.x,p.y,0);
+                    ctx.fillStyle=`rgba(251, 146, 60,${p.life})`; ctx.fillRect(pp.x,pp.y,3*camera.scale,3*camera.scale);
+                }
+            }
+            if(p.life<=0) particles.splice(i,1);
+        }
+    }
+
+    function drawCFD(r) {
+        const grid=20, size=30;
+        const checkContour = el('checkContour')?.checked;
+        const checkStream = el('checkStream')?.checked;
+        
+        ctx.globalAlpha = 0.5;
+        for(let i=-size/2; i<size/2; i++) {
+            for(let j=-size/2; j<size/2; j++) {
+                const wx=r.x+i*grid*2, wy=r.y+j*grid*2;
+                const pp=project(wx,wy,0);
+                
+                const dx=wx-r.x, dy=wy-r.y, dist=Math.sqrt(dx*dx+dy*dy);
+                let val=0;
+                
+                if(visualMode==='cfd' || visualMode==='pres') {
+                     const dot = (dx*(-r.vx)+dy*(-r.vy))/(dist*r.velocity||1);
+                     if(dist < r.height*1.5 && dot > 0.8) val=1.0; 
+                     else if(dist < r.height*2 && dot < -0.5) val=0.1;
+                     else val=0.4;
+                } else if (visualMode === 'vel') val = r.velocity/3000;
+                
+                if(checkContour) {
+                    ctx.fillStyle = getTurboColor(val);
+                    ctx.fillRect(pp.x, pp.y, grid*camera.scale*2.2, grid*camera.scale*2.2);
+                }
+                
+                if(checkStream && Math.random()<0.005) {
+                    particles.push({type:'stream', x:wx, y:wy, life:1.0, color:'rgba(255,255,255,0.4)'});
+                }
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+    
+    // --- UI UPDATER ---
+    function updateUI() {
+        if(!rocket) return;
+        safeText('dispAlt', (rocket.altitude/1000).toFixed(1) + ' km');
+        safeText('dispVel', rocket.velocity.toFixed(0) + ' m/s');
+        safeText('dispMach', "MACH " + rocket.mach.toFixed(2));
+        safeText('telQ', (rocket.q/1000).toFixed(1) + " kPa");
+        
+        const throt = rocket.throttle * 100;
+        safeText('valThrottle', throt.toFixed(0) + "%");
+        const barT = el('barThrottle'); if(barT) barT.style.width = throt + "%";
+        
+        const fuel = (rocket.fuelMass / rocket.maxFuel) * 100;
+        safeText('valFuel', fuel.toFixed(0) + "%");
+        const barF = el('barFuel'); if(barF) barF.style.width = fuel + "%";
+
+        const r=rocket.altitude+SIM.EarthRadius, v=rocket.velocity, mu=SIM.G*SIM.EarthMass;
+        const E=(v*v)/2 - mu/r;
+        let ap="--", pe="--";
+        if(E < 0) {
+            const a = -mu/(2*E);
+            const ra = a*(1+0.1); 
+            const rp = a*(1-0.1);
+            ap = ((ra - SIM.EarthRadius)/1000).toFixed(0) + " km";
+            pe = ((rp - SIM.EarthRadius)/1000).toFixed(0) + " km";
+        } else { ap = "ESCAPE"; }
+        
+        safeText('telAp', ap); safeText('telPe', pe);
+        
+        const leg = el('mfdLegend');
+        if(visualMode !== 'real' && leg) {
+             leg.classList.remove('hidden');
+             let max=1.0, unit="";
+             if(visualMode==='cfd') { max=1.0; unit="Cp"; }
+             if(visualMode==='fea') { max=200; unit="MPa"; }
+             if(visualMode==='thermal') { max=1500; unit="K"; }
+             safeText('legMax', max); safeText('legMin', "0"); safeText('mfdVal', unit);
+        } else if(leg) leg.classList.add('hidden');
+    }
+
+    function drawCharts() {
+        drawOne('chartAlt', histAlt, '#38bdf8');
+        drawOne('chartQ', histQ, '#f97316');
+    }
+    
+    function drawOne(id, data, color) {
+        const c=el(id); if(!c) return;
+        const cx=c.getContext('2d');
+        if(c.width!==c.offsetWidth){c.width=c.offsetWidth;c.height=c.offsetHeight;}
+        cx.clearRect(0,0,c.width,c.height);
+        cx.strokeStyle="rgba(56, 189, 248, 0.1)"; cx.lineWidth=1; cx.beginPath(); cx.moveTo(0,c.height/2); cx.lineTo(c.width,c.height/2); cx.stroke();
+        if(data.length<2) return;
+        const max=Math.max(...data, 10);
+        cx.beginPath(); cx.strokeStyle=color; cx.lineWidth=2;
+        const MAX_HIST = 200; // Define locally if not global or ensure global scope access
+        const step=c.width/MAX_HIST;
+        for(let i=0;i<data.length;i++) {
+            const x=i*step; const y=c.height - (data[i]/max)*c.height;
+            if(i===0) cx.moveTo(x,y); else cx.lineTo(x,y);
+        }
+        cx.stroke();
+    }
+
+    function initDraggable() {
+        document.querySelectorAll('.hud-panel, .terminal-window').forEach(p => {
+            const h=p.querySelector('.hud-title, .terminal-header');
+            if(!h) return;
+            h.addEventListener('mousedown', e => {
+                if(e.target.tagName==='BUTTON') return;
+                let dx=e.clientX-p.offsetLeft, dy=e.clientY-p.offsetTop;
+                const mv=(ev)=>{ p.style.left=(ev.clientX-dx)+'px'; p.style.top=(ev.clientY-dy)+'px'; };
+                const up=()=>{ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+                document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+            });
+        });
+    }
+
+    function loadMission(k) {
+        const d=MISSIONS[k]; rocket=new Rocket(d.rocket); 
+        trail=[]; particles=[]; spentStages=[]; histAlt=[]; histQ=[]; 
+        paused = true; mapView = false; camera.camLock = true;
+        safeClassRemove('panelMission', 'closed'); safeClassRemove('panelTelem', 'closed'); safeClassRemove('missionInfoPanel', 'hidden','closed');
+        safeText('infoTitle', d.name); safeText('infoPayload', d.payload);
+        safeText('infoDest', d.dest); safeText('infoFact', d.fact);
+        init();
+        showToast("MISSION LOADED: " + d.name);
+    }
+    
+    function loadMaxQTest() {
+        loadMission('STARSHIP'); rocket.x=0; rocket.y=-(SIM.EarthRadius+10000); rocket.vx=340; rocket.vy=0; rocket.throttle=1; rocket.auto=true;
+        setVisualMode('cfd'); toggleCFDTerminal();
+        showToast("MAX-Q TEST INITIATED");
+    }
+    
+    function toggleBuilder() { const w=el('winBuild'); if(w) w.classList.toggle('closed'); }
+    function launchCustom() {
+        const d = parseFloat(el('bDry').value), f = parseFloat(el('bFuel').value);
+        const t = parseFloat(el('bThrust').value), i = parseFloat(el('bIsp').value);
+        rocket = new Rocket({stages:[{dry:d, fuel:f, thrust:t, isp:i, w:5, h:40, c:'#fff'}]});
+        toggleBuilder(); 
+        safeText('infoTitle', el('bName').value);
+        init();
+        launchSequence();
+        showToast("CUSTOM VEHICLE INTEGRATED");
+    }
+
+    function togglePause() { 
+        AudioSys.init();
+        isPaused=!isPaused; el('btnPause').innerHTML = isPaused ? '<i class="fas fa-play"></i><span>PLAY</span>' : '<i class="fas fa-pause"></i><span>PAUSE</span>'; 
+    }
+    function setWarp(x) { timeWarp=x; document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); safeClassAdd('warp'+x, 'active'); showToast("TIME WARP: " + x + "x"); }
+    function launchSequence() { AudioSys.init(); if(rocket) { rocket.auto=true; rocket.throttle=1; isPaused=false; } showToast("AUTO-SEQUENCE START"); }
+    function manualStage() { if(rocket) rocket.stage(); }
+    function toggleMap() { 
+        mapView = !mapView; 
+        const b = el('btnMap'); if(b) b.style.color = mapView ? '#38bdf8' : '#fff';
+        safeStyleDisplay('mapIndicator', mapView ? 'block' : 'none');
+        camera.targetScale = mapView ? 0.005 : 1;
+        safeStyleDisplay('orbitData', mapView ? 'block' : 'none'); // Orbit table
+        if(mapView) { 
+            camera.x=width/2; camera.y=height/2; 
+            camera.camLock = true; // Auto-lock on entry
+            showToast("ORBITAL TRACKING ENGAGED");
+        } else {
+             showToast("LAUNCH VIEW ACTIVE");
+        }
+    }
+    
+    function skipToOrbit() {
+        if(!rocket) return;
+        rocket.x=0; rocket.y=-(SIM.EarthRadius+250000); 
+        rocket.vx=Math.sqrt(SIM.G*SIM.EarthMass/(SIM.EarthRadius+250000)); rocket.vy=0;
+        rocket.throttle=0; rocket.auto=false; rocket.fuelMass=rocket.maxFuel*0.1;
+        if(!mapView) toggleMap();
+        showToast("ORBITAL INSERTION COMPLETE");
+    }
+
+    function resetCamera() { camera.camLock = true; camera.rotX=0; camera.rotY=0; showToast("CAMERA LOCKED"); }
+
+    function toggleMFD() { safeClassToggle('winMFD', 'closed'); }
+    function toggleCFDTerminal() { safeClassToggle('cfdTerminal', 'closed'); }
+    function toggleDocModal() { safeClassToggle('docModal', 'closed'); }
+    
+    function setVisualMode(m) { 
+        visualMode=m; 
+        document.querySelectorAll('.btn-ctrl').forEach(b=>b.classList.remove('active'));
+        const btn = el('vis'+m.charAt(0).toUpperCase()+m.slice(1));
+        if(btn) btn.classList.add('active');
+        updateUI();
+        showToast("VISUAL MODE: " + m.toUpperCase());
+    }
+    
+    function exportData() {
+        if(!rocket || histAlt.length===0) return alert("No Data");
+        let csv = "Time,Alt,Q\n";
+        for(let i=0; i<histAlt.length; i++) csv += `${i*0.1},${histAlt[i].toFixed(2)},${histQ[i].toFixed(2)}\n`;
+        const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURI(csv); a.download='data.csv'; a.click();
+    }
+
+    window.onload = () => {
+        initDraggable();
+        init();
+        window.addEventListener('resize', ()=>resize());
+        window.addEventListener('keydown', e => {
+            if(!rocket) return;
+            if(e.key==='w') { rocket.throttle=Math.min(1, rocket.throttle+0.1); rocket.auto=false; }
+            if(e.key==='s') { rocket.throttle=Math.max(0, rocket.throttle-0.1); rocket.auto=false; }
+            if(e.key===' ') manualStage();
+        });
+    };
+
+</script>
+</body>
+</html>
