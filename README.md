@@ -1,11 +1,4 @@
-Awesome project name btw 🚀 — “Rocket-Sim” sounds serious, so let’s give it a **professional, aerospace-grade README**.
-
-Below is a **complete, polished README.md** you can paste directly into your repo.
-(It highlights CFD, aerodynamics, FVD method, options, etc. as you asked.)
-
----
-
-# 🚀 Rocket-Sim — CFD Based Rocket Flight Simulator
+🚀 RocketSim : CFD Based Rocket Flight Simulator
 
 **Rocket-Sim** is an interactive web-based rocket flight simulator that models rocket motion using principles from **Computational Fluid Dynamics (CFD)**, **aerodynamics**, and classical flight mechanics.
 
